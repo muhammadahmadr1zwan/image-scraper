@@ -1,6 +1,6 @@
 # image-scraper
 
-Node.js CLI for downloading high-resolution cafe photos from legitimate sources. Built for the [Niyyah Coffee](https://github.com/muhammadahmadr1zwan/niyyah-website) website.
+Node.js CLI for downloading high-resolution location photos from legitimate sources.
 
 No HTML scraping of Google Reviews or Maps pages. Photos come from:
 
@@ -19,26 +19,27 @@ Requires **Node.js 18+**. Uses built-in `fetch` - no `npm install` needed.
 git clone https://github.com/muhammadahmadr1zwan/image-scraper.git
 cd image-scraper
 cp .env.example .env   # optional - only needed for Places API fallback
+cp cafes.example.json cafes.json   # if cafes.json is missing
 ```
 
-If you want the main CLI to write into the website repo, either:
+Edit `cafes.json` with your locations:
 
-- Clone [niyyah-website](https://github.com/muhammadahmadr1zwan/niyyah-website) as a sibling folder (`../niyyah-website`), **or**
-- Set `NIYYAH_REPO` to the path of your website checkout:
-
-```bash
-# Windows
-set NIYYAH_REPO=C:\path\to\niyyah-website
-
-# macOS / Linux
-export NIYYAH_REPO=/path/to/niyyah-website
+```json
+[
+  {
+    "id": "downtown-cafe",
+    "name": "Downtown Cafe",
+    "region": "us",
+    "address": "123 Main St, City, ST 12345"
+  }
+]
 ```
 
 ---
 
 ## Workflow 1 - Google Maps photos (recommended)
 
-Use this when you have a Google Maps share link for a specific interior photo.
+Use this when you have a Google Maps share link for a specific photo.
 
 ### 1. Get the share link
 
@@ -54,8 +55,8 @@ Edit `scripts/download-maps-urls.js` and add an entry to the `ENTRIES` array:
 
 ```js
 {
-  cafeId: "mccordsville",
-  url: "https://www.google.com/maps/place/Niyyah+Coffee/@39.89016,-85.9183834,..."
+  id: "downtown-cafe",
+  url: "https://www.google.com/maps/place/..."
 }
 ```
 
@@ -67,77 +68,48 @@ node scripts/download-maps-urls.js
 npm run maps
 ```
 
-The script:
+The script parses the photo URL, rebuilds it at max resolution, and saves to `overrides/{id}.jpg`.
 
-1. Parses the `lh3.googleusercontent.com` URL from the Maps link
-2. Rebuilds it at max resolution using the `7i` / `8i` width/height params
-3. Saves to `overrides/{cafe-id}.jpg`
-
-Example output:
-
-```
-mccordsville: ok (34856 KB) -> overrides/mccordsville.jpg
-```
-
-### 4. Copy into the website
+### 4. Copy into the output folder
 
 ```bash
-node index.js --cafe mccordsville --force
+node index.js --cafe downtown-cafe --force
 ```
 
-Writes `assets/img/cafe-mccordsville.jpg` in the website repo and updates `data.js` if the extension changed.
+Writes `output/{id}.jpg` (or `.png` depending on source).
 
 ---
 
 ## Workflow 2 - Main photo fetcher
 
-Resolves photos for every cafe listed in the website's `assets/js/data.js`.
+Resolves photos for every location listed in `cafes.json`.
 
 ```bash
-# List cafes and what's configured
 node index.js --list
-
-# Preview without downloading
 node index.js --dry-run
-
-# Fetch all US cafes
 node index.js
-
-# Single cafe
-node index.js --cafe mccordsville
-
-# Include Canadian locations (e.g. Markham)
+node index.js --cafe downtown-cafe
 node index.js --all-regions
-
-# Overwrite existing images
 node index.js --force
 ```
 
 ### Source priority
 
-For each cafe, the tool tries sources in this order:
-
 | Priority | Source | Config |
 | --- | --- | --- |
-| 1 | Manual override | `overrides/{cafe-id}.jpg\|png\|webp` |
+| 1 | Manual override | `overrides/{id}.jpg\|png\|webp` |
 | 2 | Instagram | Permalink in `sources.json` |
 | 3 | Google Places API | `GOOGLE_PLACES_API_KEY` in `.env` |
 
-Failures for one cafe do not stop the rest of the run.
-
 ### Instagram setup
-
-Add a permalink to `sources.json`:
 
 ```json
 {
-  "mccordsville": {
+  "downtown-cafe": {
     "instagram": "https://www.instagram.com/p/XXXXXXXX/"
   }
 }
 ```
-
-Downloads via the public media endpoint (`/p/{shortcode}/media/?size=l`).
 
 ### Google Places API (optional)
 
@@ -149,43 +121,22 @@ Downloads via the public media endpoint (`/p/{shortcode}/media/?size=l`).
 GOOGLE_PLACES_API_KEY=your_key_here
 ```
 
-Used only when no override or Instagram source is available. Downloads the first place photo at up to 1600px.
-
 ---
 
 ## Project structure
 
 ```
 image-scraper/
-  index.js                    Main CLI - resolves and copies photos to website
-  scripts/
-    download-maps-urls.js     Extract + download from Google Maps share links
-  lib/
-    paths.js                  Repo root detection (standalone / nested / NIYYAH_REPO)
-    load-cafes.js             Reads cafe list from website data.js
-    load-sources.js           Reads sources.json
-    resolve-image.js          Source priority chain
-    fetch-instagram.js        Instagram media download
-    fetch-places.js           Google Places API (New)
-  overrides/                  Manual photos (gitignored except .gitkeep)
-  sources.json                Per-cafe Instagram / notes
-  .env.example                API key template
+  index.js                    Main CLI
+  cafes.json                  Your locations (copy from cafes.example.json)
+  scripts/download-maps-urls.js   Google Maps share-link downloader
+  lib/                        Fetchers and config loading
+  overrides/                  Manual photos (gitignored)
+  output/                     Downloaded images (gitignored)
+  sources.json                Per-location Instagram / notes
+  .env.example
   package.json
 ```
-
----
-
-## CLI reference
-
-| Flag | Description |
-| --- | --- |
-| `--list` | Show cafe id, region, address, image on disk, override/Instagram availability |
-| `--dry-run` | Show planned source and destination without downloading |
-| `--cafe <id>` | Process one cafe |
-| `--force` | Overwrite existing `assets/img/cafe-*` files |
-| `--all-regions` | Include non-`us` cafes (e.g. Markham) |
-| `--verbose`, `-v` | Log HTTP/source resolution details |
-| `--help`, `-h` | Show help |
 
 ---
 
@@ -193,40 +144,35 @@ image-scraper/
 
 | Variable | Required | Description |
 | --- | --- | --- |
-| `GOOGLE_PLACES_API_KEY` | No | Places API fallback when no override/Instagram |
-| `NIYYAH_REPO` | No | Path to niyyah-website checkout (auto-detected if sibling folder) |
-
-Copy `.env.example` to `.env`. Never commit `.env`.
+| `GOOGLE_PLACES_API_KEY` | No | Places API fallback |
+| `OUTPUT_DIR` | No | Custom output directory (default: `./output`) |
 
 ---
 
-## Gitignored paths
+## CLI reference
 
-- `.env` - API keys
-- `overrides/*` - downloaded or client-provided photos (keep local)
+| Flag | Description |
+| --- | --- |
+| `--list` | Show locations and configured sources |
+| `--dry-run` | Preview without downloading |
+| `--cafe <id>` | Process one location |
+| `--force` | Overwrite existing output files |
+| `--all-regions` | Include all regions (default: `us` only) |
+| `--verbose`, `-v` | Log resolution details |
+| `--help`, `-h` | Show help |
 
 ---
 
 ## Troubleshooting
 
-**Could not read cafes from data.js**
+**Missing cafes.json**
 
-Set `NIYYAH_REPO` to your website checkout, or clone niyyah-website as `../niyyah-website`.
+Copy `cafes.example.json` to `cafes.json` and add your locations.
 
-**No lh3 URL in link and GOOGLE_PLACES_API_KEY not set**
+**No lh3 URL in link**
 
-The Maps share link does not contain an embedded photo URL. Open the specific photo in Maps and copy a fresh share link, or set a Places API key as fallback.
+Open the specific photo in Maps and copy a fresh share link, or set a Places API key as fallback.
 
 **Downloaded image is tiny**
 
-The script falls back to `=s0` if the sized URL fails. Check that the Maps URL includes `!7i{width}!8i{height}` params.
-
-**Instagram failed**
-
-Post may be private or the endpoint blocked the request. Use a Maps override or Places API instead.
-
----
-
-## Related
-
-- [niyyah-website](https://github.com/muhammadahmadr1zwan/niyyah-website) - the site this tool feeds photos into
+Check that the Maps URL includes `!7i{width}!8i{height}` params.

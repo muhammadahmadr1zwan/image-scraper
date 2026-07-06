@@ -1,24 +1,6 @@
 {
-  "hub-and-spoke": {
+  "example-location": {
     "instagram": null,
-    "yelp": "https://s3-media0.fl.yelpcdn.com/bphoto/RmLRXzXZXIzvowWViYGjQw/o.jpg",
-    "notes": "Interior with NIYYAH COFFEE banner — Yelp (Fishers Hub & Spoke)"
-  },
-  "broad-ripple": {
-    "instagram": null,
-    "yelp": "https://s3-media0.fl.yelpcdn.com/bphoto/TDEPl7336dHOHLDAqjZjSA/o.jpg",
-    "notes": "Counter with neon NIYYAH COFFEE sign — Yelp (Broad Ripple / AYR)"
-  },
-  "mccordsville": {
-    "instagram": null,
-    "notes": "Original interior photo in assets/img/cafe-mccordsville.png"
-  },
-  "mass-ave": {
-    "instagram": null,
-    "notes": "Interior — SIGN · SIP · CONNECT wall; client-provided photo"
-  },
-  "markham": {
-    "instagram": null,
-    "notes": "Canadian cafe — use overrides/ or Instagram; Places API works with --all-regions"
+    "notes": "Add an Instagram permalink, a Maps override, or rely on Google Places API"
   }
 }

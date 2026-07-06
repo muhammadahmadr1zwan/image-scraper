@@ -7,12 +7,9 @@ const { loadCafes } = require("./lib/load-cafes");
 const { loadSources, getInstagramPermalink } = require("./lib/load-sources");
 const { resolveImage } = require("./lib/resolve-image");
 const {
-  DATA_JS,
-  IMG_DIR,
+  OUTPUT_DIR,
   cafeImagePath,
-  relativeImagePath,
   findOverride,
-  imageExists,
   existingImagePath
 } = require("./lib/paths");
 
@@ -71,7 +68,7 @@ function parseArgs(argv) {
     } else if (arg === "--cafe") {
       options.cafe = argv[++i];
       if (!options.cafe) {
-        throw new Error("--cafe requires a cafe id");
+        throw new Error("--cafe requires a location id");
       }
     } else if (arg === "--help" || arg === "-h") {
       printHelp();
@@ -85,28 +82,28 @@ function parseArgs(argv) {
 }
 
 function printHelp() {
-  console.log(`image-scraper — cafe photo fetcher
+  console.log(`image-scraper - location photo fetcher
 
 Usage:
   node index.js [options]
 
 Options:
-  --list           Show cafe id, region, address, and current image path
+  --list           Show location id, region, address, and current image path
   --dry-run        Show what would be downloaded without writing files
-  --cafe <id>      Process a single cafe (default: all US cafes)
-  --force          Overwrite existing images in assets/img/
-  --all-regions    Include non-US cafes (default: region "us" only)
+  --cafe <id>      Process a single location (default: all with region "us")
+  --force          Overwrite existing images in the output directory
+  --all-regions    Include all regions (default: region "us" only)
   --verbose, -v    Log source resolution details
   --help, -h       Show this help
 
 Sources (priority order):
-  1. overrides/{cafe-id}.jpg|png
+  1. overrides/{id}.jpg|png
   2. Instagram permalink in sources.json
   3. Google Places API (New) via GOOGLE_PLACES_API_KEY
 
 Environment:
   GOOGLE_PLACES_API_KEY   Optional; required for Places fallback
-  NIYYAH_REPO             Optional path to niyyah-website checkout
+  OUTPUT_DIR              Optional; where to save images (default: ./output)
   .env in repo root is loaded automatically
 `);
 }
@@ -125,7 +122,7 @@ function filterCafes(cafes, options) {
       return cafe.id === options.cafe;
     });
     if (filtered.length === 0) {
-      throw new Error(`Cafe not found in data.js: ${options.cafe}`);
+      throw new Error(`Location not found in cafes.json: ${options.cafe}`);
     }
   }
 
@@ -142,27 +139,13 @@ function printList(cafes, sources) {
       [
         cafe.id,
         cafe.region,
-        onDisk ? path.relative(path.dirname(DATA_JS), onDisk).replace(/\\/g, "/") : cafe.image,
+        onDisk ? path.relative(OUTPUT_DIR, onDisk).replace(/\\/g, "/") : "(none)",
         override ? "yes" : "no",
         instagram ? "yes" : "no",
         cafe.address
       ].join("\t")
     );
   }
-}
-
-function updateDataJsImagePath(cafeId, newRelativePath) {
-  let content = fs.readFileSync(DATA_JS, "utf8");
-  const pattern = new RegExp(
-    `(id:\\s*"${cafeId}"[\\s\\S]*?image:\\s*IMG\\s*\\+\\s*"/)[^"]+(")`
-  );
-  const replacement = `$1${newRelativePath.replace(/^assets\/img\//, "")}$2`;
-  const updated = content.replace(pattern, replacement);
-  if (updated === content) {
-    return false;
-  }
-  fs.writeFileSync(DATA_JS, updated, "utf8");
-  return true;
 }
 
 async function processCafe(cafe, options, sources, apiKey) {
@@ -191,7 +174,7 @@ async function processCafe(cafe, options, sources, apiKey) {
     return {
       id: cafe.id,
       status: "dry-run",
-      reason: `${plannedSource} -> assets/img/cafe-${cafe.id}.${destExt}`
+      reason: `${plannedSource} -> output/${cafe.id}.${destExt}`
     };
   }
 
@@ -202,19 +185,15 @@ async function processCafe(cafe, options, sources, apiKey) {
   });
 
   const destPath = cafeImagePath(cafe.id, result.ext);
-  fs.mkdirSync(IMG_DIR, { recursive: true });
+  fs.mkdirSync(OUTPUT_DIR, { recursive: true });
   fs.writeFileSync(destPath, result.buffer);
-
-  const relativePath = relativeImagePath(cafe.id, result.ext);
-  const dataUpdated = updateDataJsImagePath(cafe.id, relativePath);
 
   return {
     id: cafe.id,
     status: "ok",
     source: result.source,
     detail: result.detail,
-    saved: destPath,
-    dataUpdated
+    saved: destPath
   };
 }
 
@@ -253,10 +232,7 @@ async function main() {
       results.push(result);
 
       if (result.status === "ok") {
-        console.log(
-          `  ok (${result.source}) -> ${path.basename(result.saved)}` +
-            (result.dataUpdated ? " [data.js updated]" : "")
-        );
+        console.log(`  ok (${result.source}) -> ${path.basename(result.saved)}`);
       } else if (result.status === "skipped") {
         console.log(`  skipped (${result.reason})`);
       } else {
